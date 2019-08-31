@@ -2,14 +2,24 @@
 #include <hal/hal.h>
 #include <SPI.h>
 
+#define ENABLED_GPS
+
+#if defined(ENABLED_GPS)
+#include <Adafruit_GPS.h>
+#endif
+
 #define LORA_RESET 8
 #define LED_1 4
 #define LED_2 6
 #define LED_3 7
 
+#if defined(ENABLED_GPS)
+Adafruit_GPS GPS(&Serial);
+#endif
+
 
 //LSB
-static const u1_t PROGMEM DEVEUI[8]={  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF0  };
+static const u1_t PROGMEM DEVEUI[8]={  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF3  };
 void os_getDevEui (u1_t* buf) { memcpy_P(buf, DEVEUI, 8);}
 
 //LSB
@@ -46,9 +56,15 @@ void setup() {
   digitalWrite(LED_1, HIGH);
   digitalWrite(LED_2, HIGH);
   digitalWrite(LORA_RESET, HIGH);   
-  
-  Serial.begin(9600);
 
+  #if defined(ENABLED_GPS)
+  GPS.begin(9600);
+  GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCGGA); //Sets output to only RMC and GGA sentences
+  GPS.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ); //Sets the output to 1/second. If you want you can go higher/lower
+  GPS.sendCommand(PGCMD_ANTENNA); //Can report if antenna is connected or not
+  #endif
+
+  
   os_init();
   LMIC_reset();
   LMIC_setLinkCheckMode(0);
@@ -66,6 +82,17 @@ void loop() {
   if((millis()%1000) == 0){
     do_send(&sendjob);
   }
+  
+ 
+ 
+#if defined(ENABLED_GPS)
+ char c = GPS.read();
+ if (GPS.newNMEAreceived()) {
+    if (!GPS.parse(GPS.lastNMEA())) // this also sets the newNMEAreceived() flag to false
+      return; // we can fail to parse a sentence in which case we should just wait for another
+ }
+#endif
+  
   os_runloop_once();
 }
 
@@ -229,9 +256,26 @@ void do_send(osjob_t* j){
     } else {
         // Prepare upstream data transmission at the next possible time.
 
+        #if defined(ENABLED_GPS)
+        mydata[0] = GPS.hour;
+        mydata[1] = GPS.minute;
+        mydata[2] = GPS.seconds;
+        mydata[3] = GPS.milliseconds;
+        mydata[4] = GPS.day;
+        mydata[5] = GPS.month;
+        mydata[6] = GPS.year;
+        mydata[7] = (int)GPS.fixquality;
+        mydata[8] = (int)GPS.fix;
+        mydata[9] = 0xFF;
+        mydata[10] = 0xFF;
+        mydata[11] = 0xFE;
+        mydata[12] = 0xFD;
+        mydata[13] = 0xFC;
+        mydata[14] = 0xFB;
         
-        mydata[0] = 123;
-        
+        #else
+        mydata[0]=100;
+        #endif
                 
         LMIC_setTxData2(1, mydata, sizeof(mydata)-1, 0);
         //Serial.println(F("Packet queued"));

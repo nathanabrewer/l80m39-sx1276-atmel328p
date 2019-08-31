@@ -5,3 +5,5 @@ Major Parts in Build v0.1
 - l80m39 GPS Radio	~5.99	
 - ATMEGA328P-AU ~ $3.00 (digikey)
 - PCB Board ~ $2.00 
+
+Basic Build < $20 each.
